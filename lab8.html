@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<head>
+<title>Waving Robot Arm</title>
+<script src="https://csc-vu.github.io/lib/three.js"></script>
+<script src="https://csc-vu.github.io/lib/KeyboardState.js"></script>
+
+
+<script>
+    var scene, camera, renderer; // Three.js rendering basics.
+    var canvas; // The canvas on which the image is rendered.
+
+    // Parts of our robotic arm 
+    var lowerArm, upperArm; 
+
+    var keyboard = new KeyboardState();
+
+    // Use a clock to keep track of time (clock starts automatically)
+    var clock = new THREE.Clock();
+
+    // Time at the beginning of animation 
+    var startTime = clock.getElapsedTime();
+
+    var keyframes = [
+        // [time stamp, upper arm rotation, lower arm rotation]
+        [0, 0.3, 0.2],
+        [0.5, 0.5, 1.2],
+        [1, 0.3, 0.2]
+    ];
+    
+    // TODO Step 5: Copy and paste the code for keyframeInterp here
+        // keyframes, duration of one animation cycle (in seconds), time elapsed since beginning of animation
+    function keyframeInterp(keyframes, cycleTime, animTime) {
+
+        var keys=[];  // array of interpolated values
+        var nKeys = keyframes[0].length-1;  // number of keys
+
+        // find time elapsed within the current cycle and scale to [0,1]
+        var time = (animTime % cycleTime) / cycleTime; 
+    
+        // find the next keyframe based on time
+        for (var i = 0; i < keyframes.length; i++) {
+            if (time < keyframes[i][0]) break;
+        }
+        i = i-1; // previous keyframe is at index i-1
+
+        // scale interpolation parameter t to interval [0,1]
+        var t = (time - keyframes[i][0]) / (keyframes[i+1][0] - keyframes[i][0]);
+    
+        // linear interpolation between keyframes i and i+1 
+        for(var j = 1; j <= nKeys; j++)
+            keys.push((1-t) * keyframes[i][j] + t * keyframes[i+1][j]); 
+
+        return keys;
+    }
+
+    // Create a camera, sitting on the positive z-axis.  The camera is not part of the scene
+    function createCamera() {
+        camera = new THREE.PerspectiveCamera(25, canvas.width/canvas.height, 1, 30);
+        camera.position.set(0, 0, 20);
+    }
+
+    function createArm(radius, length) // radius is half the arm width (scale factor)
+    {
+        // Set up cube geometry and material
+        var cubeGeom = new THREE.BoxGeometry(1,1,1);
+
+        // Draw each face of the cube in a different color
+        var cubeMat = [  // An array of materials
+            new THREE.MeshBasicMaterial( { color: "red" } ),     // +x face
+            new THREE.MeshBasicMaterial( { color: "cyan" } ),    // -x face
+            new THREE.MeshBasicMaterial( { color: "green" } ),   // +y face
+            new THREE.MeshBasicMaterial( { color: "magenta" } ), // -y face
+            new THREE.MeshBasicMaterial( { color: "yellow" } ),  // +z face
+            new THREE.MeshBasicMaterial( { color: "blue" } )     // -z face
+        ];
+
+        // Set up the arm mesh
+        var cubeMesh = new THREE.Mesh(cubeGeom, cubeMat);
+        cubeMesh.scale.set(length, radius, radius);
+
+        // Set up arm container
+        var arm = new THREE.Object3D();
+        arm.add(cubeMesh);          // add arm mesh to container
+        cubeMesh.position.x += length/2;   // position mesh relative to container
+
+        // From this point on, we work with the arm container/object only
+        return arm;
+    }
+
+    // Create the scene. This function is called once, as soon as the page loads.
+    // The renderer has already been created before this function is called.
+    function createScene() {
+
+        renderer.setClearColor(0);  // Set background color (0, or 0x000000, is black).
+        scene = new THREE.Scene();  // Create a new scene which we can add objects to.
+
+        // Add world coordinate system for guidance
+        var axesHelper = new THREE.AxesHelper( 4 );
+        scene.add( axesHelper );
+
+        // Set up the arm dimensions
+        var armRadius = 0.5;
+        var armLength = 2;
+
+        // Create hierarchy of arm objects 
+        upperArm = createArm(armRadius, armLength); 
+        lowerArm = createArm(armRadius, armLength);
+        upperArm.add(lowerArm);     // lowerArm is a child of upperArm
+        scene.add(upperArm);        // upperArm is a child of scene
+
+        // Position lower arm relative to parent (upperArm)
+        lowerArm.position.x += armLength;       // relative to upperArm
+
+        // Rotate arms for a better view
+        upperArm.rotation.set(0.4,0,0.3);  
+        lowerArm.rotation.z += 0.2;
+   }
+
+    function update() {
+        keyboard.update();
+
+        if ( keyboard.down("left") ) {
+            // move arm clockwise
+            upperArm.rotation.z -= 0.03;
+        }
+        if ( keyboard.down("right") ) {
+            // move arm counter-clockwise
+            upperArm.rotation.z += 0.03;
+        }
+        if ( keyboard.down("down") ) {
+            // move lowerArm clockwise
+            lowerArm.rotation.z -= 0.03;
+        }
+        if ( keyboard.down("up") ) {
+            // move lowerArm counter-clockwise
+            lowerArm.rotation.z += 0.03;
+        }
+        // TODO Step 4: Add code to print rotation angles here
+
+        if ( keyboard.down("P") ) {
+        // print rotation angles for upperArm and lowerArm
+            console.log(upperArm.rotation.z);
+            console.log(lowerArm.rotation.z);
+        }
+
+    }
+
+    // Render the scene. This is called for each frame of the animation.
+    function render() {
+        requestAnimationFrame( render );
+
+        update();
+
+        var keys = keyframeInterp(keyframes, 1.5, clock.getElapsedTime() - startTime);
+        
+        // TODO Step 6: update upperArm and lowerArm rotations based on key values
+        upperArm.rotation.z = keys[0];
+        lowerArm.rotation.z = keys[1];
+
+        renderer.render(scene, camera);
+    }
+
+    //----------------------------------------------------------------------------------
+
+    // The main() function is called by the onload event when the document has loaded.
+    function main() {
+        try {
+            canvas = document.getElementById("glcanvas");
+            renderer = new THREE.WebGLRenderer( { canvas: canvas, antialias: true} );
+        }
+        catch (e) {
+            document.getElementById("canvas-holder").innerHTML = "<h3><b>WebGL is not available.</b><h3>";
+            return;
+        }
+    
+        // create camera
+        createCamera();
+        
+        // create scene 
+        createScene();
+
+        // render scene
+        render();
+    }
+
+</script>
+
+</head>
+<body onload="main()">
+<div id="canvas-holder">
+    <canvas id="glcanvas" width="600" height="400"></canvas>
+</div>
+</body>
+</html>
